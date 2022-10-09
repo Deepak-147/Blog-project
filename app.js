@@ -2,6 +2,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const _ = require("lodash"); // multi-purpose utility library
+const mongoose = require("mongoose");
 
 const port = process.env.PORT || 3000;
 
@@ -12,15 +13,54 @@ const aboutContent = "Hac habitasse platea dictumst vestibulum rhoncus est pelle
 const contactContent = "Scelerisque eleifend donec pretium vulputate sapien. Rhoncus urna neque viverra justo nec ultrices. Arcu dui vivamus arcu felis bibendum. Consectetur adipiscing elit duis tristique. Risus viverra adipiscing at in tellus integer feugiat. Sapien nec sagittis aliquam malesuada bibendum arcu vitae. Consequat interdum varius sit amet mattis. Iaculis nunc sed augue lacus. Interdum posuere lorem ipsum dolor sit amet consectetur adipiscing elit. Pulvinar elementum integer enim neque. Ultrices gravida dictum fusce ut placerat orci nulla. Mauris in aliquam sem fringilla ut morbi tincidunt. Tortor posuere ac ut consequat semper viverra nam libero.";
 
 const app = express();
-const posts = [];
 
 app.set('view engine', 'ejs');
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static("public"));
 
+app.listen(port, function() {
+  console.log("Server started on port: "+port);
+});
+
+main().catch(err => console.log(err));
+
+async function main() {
+    let dbName = "blogDB";
+
+    // connecting to local db
+    // await mongoose.connect('mongodb://localhost:27017/blogDB');
+
+    // connecting to hosted db (MongoDB Atlas)
+    await mongoose.connect("mongodb+srv://" + process.env.MONGODB_ADMIN_USER + ":" + process.env.MONGODB_ADMIN_PASS + "@cluster0.vekgroy.mongodb.net/" + dbName);
+};
+
+/***********
+ * Post
+***********/
+
+/**
+ * create a SCHEMA that sets out the fields each document will have and their datatypes and validations.
+ **/
+const postSchema = new mongoose.Schema({
+  title: {
+    type: String, // Datatype
+    required: [true, "A post without title cannot exist. Please check your entry and try again."] // Validation
+  },
+  content: String // Datatype
+});
+
+/**
+ * create a MODEL. A model is a class with which we construct documents. In this case, each document will be a post with properties(and behaviors) as declared in our schema.
+ */
+const Post = mongoose.model("Post", postSchema);
+
 app.get("/", (req, res) => {
-  res.render("home", {headerTextContent: homeStartingContent, posts: posts});
+  Post.find({}, (err, posts) => {
+    if (!err) {
+      res.render("home", {headerTextContent: homeStartingContent, posts: posts});
+    }
+  });
 });
 
 app.get("/about", (req, res) => {
@@ -36,37 +76,27 @@ app.get("/compose", (req, res) => {
 });
 
 app.post("/compose", (req, res) => {
-  const post = {
+  const post = new Post ({
     title: req.body.postTitle,
     content: req.body.postBody
-  };
+  });
 
-  posts.push(post);
-  res.redirect("/");
+  post.save((err) => {
+    if (!err) {
+      res.redirect("/");
+    }
+  });
+
 });
 
 
 // Route params
-app.get("/posts/:postTitle", (req, res) => {
-  const requestedTitle = _.lowerCase(req.params.postTitle);
+app.get("/posts/:postId", (req, res) => {
+  const requestedPostId = req.params.postId;
   
-  posts.forEach((post) => {
-    const storeTitle = _.lowerCase(post.title);
-
-    if (storeTitle === requestedTitle) {
+  Post.findOne({ _id: requestedPostId }, (err, post) => {
+    if (!err) {
       res.render("post", {post: post});
     }
-    else {
-      console.log("no matches");
-    }
   });
-})
-
-
-
-
-
-
-app.listen(port, function() {
-  console.log("Server started on port: "+port);
 });
